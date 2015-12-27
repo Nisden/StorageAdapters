@@ -169,7 +169,7 @@
             string nextMarker = string.Empty;
             do
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, $"?comp=list&marker={Uri.EscapeDataString(nextMarker)}&prefix={Uri.EscapeDataString(path)}&delimiter={Configuration.DirectorySeperator}");
+                var request = new HttpRequestMessage(HttpMethod.Get, $"{path.Split('/', '\\')[0]}?restype=container&comp=list&marker={Uri.EscapeDataString(nextMarker)}&prefix={Uri.EscapeDataString(path)}&delimiter={Configuration.DirectorySeperator}");
                 var response = await SendRequest(request, cancellationToken);
                 var responseDocument = System.Xml.Linq.XDocument.Parse(await response.Content.ReadAsStringAsync());
 
