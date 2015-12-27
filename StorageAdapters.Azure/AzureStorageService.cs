@@ -1,6 +1,7 @@
 ﻿namespace StorageAdapters.Azure
 {
     using Platform;
+    using Streams;
     using System;
     using System.Collections.Generic;
     using System.IO;
@@ -77,13 +78,13 @@
             else
             {
                 // Delete all blobls with matching prefix
-                throw new NotImplementedException();
+                throw new NotImplementedException("Recursive deletion of blobs are unimplemented");
             }
         }
 
-        public override Task DeleteFileAsync(string path, CancellationToken cancellationToken)
+        public override async Task DeleteFileAsync(string path, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            await SendRequest(new HttpRequestMessage(HttpMethod.Delete, EncodePath(path)), cancellationToken);
         }
 
         public override async Task<bool> DirectoryExistAsync(string path, CancellationToken cancellationToken)
@@ -114,9 +115,17 @@
             
         }
 
-        public override Task<bool> FileExistAsync(string path, CancellationToken cancellationToken)
+        public override async Task<bool> FileExistAsync(string path, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            try
+            {
+                await GetFileAsync(path, cancellationToken);
+                return true;
+            }
+            catch (NotFoundException)
+            {
+                return false;
+            }
         }
 
         public override async Task<IEnumerable<IVirtualDirectory>> GetDirectoriesAsync(string path, CancellationToken cancellationToken)
@@ -140,16 +149,16 @@
 
         public override async Task<IVirtualFileInfo> GetFileAsync(string path, CancellationToken cancellationToken)
         {
-            var request = new HttpRequestMessage(HttpMethod.Head, path);
+            var request = new HttpRequestMessage(HttpMethod.Head, EncodePath(path));
             var response = await SendRequest(request, cancellationToken);
 
             return new AzureFileInfo()
             {
                 Name = PathUtility.GetFileName(Configuration.DirectorySeperator, path),
-                LastModified = DateTimeOffset.ParseExact(response.Headers.GetValues("Last-Modified").Single(), "R", System.Globalization.CultureInfo.InvariantCulture),
+                LastModified = response.Content.Headers.LastModified.Value,
                 Path = PathUtility.Clean(Configuration.DirectorySeperator, path),
-                Size = long.Parse(response.Headers.GetValues("Content-Length").Single()),
-                MD5 = response.Headers.GetValues("Content-MD5").Single(),
+                Size = response.Content.Headers.ContentLength.GetValueOrDefault(),
+                MD5 = Convert.ToBase64String(response.Content.Headers.ContentMD5),
                 BlobType = response.Headers.GetValues("x-ms-blob-type").Single()
             };
         }
@@ -181,9 +190,10 @@
             return files;
         }
 
-        public override Task<Stream> ReadFileAsync(string path, CancellationToken cancellationToken)
+        public override async Task<Stream> ReadFileAsync(string path, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            var response = await SendRequest(new HttpRequestMessage(HttpMethod.Get, EncodePath(path)), cancellationToken);
+            return await response.Content.ReadAsStreamAsync();
         }
 
         public override async Task SaveFileAsync(string path, Stream stream, CancellationToken cancellationToken)
@@ -193,7 +203,7 @@
             if (stream.Length < 64000000)
             {
                 var request = new HttpRequestMessage(HttpMethod.Put, EncodePath(path));
-                request.Content = new StreamContent(stream);
+                request.Content = new StreamContent(new UncloseableStream(stream));
                 request.Headers.Add("x-ms-blob-type", "BlockBlob");
 
                 await SendRequest(request, cancellationToken);
@@ -301,19 +311,19 @@
 
             // Create that darm Azure signature!
             string stringToSign = request.Method.Method.ToUpper() + "\n" +
-               GetHeaderValue("Content-Encoding", request) + "\n" +
-               GetHeaderValue("Content-Language", request) + "\n" +
-               GetHeaderValue("Content-Length", request) + "\n" +
-               GetHeaderValue("Content-MD5", request) + "\n" +
-               GetHeaderValue("Content-Type", request) + "\n" +
-               GetHeaderValue("Date", request) + "\n" +
-               GetHeaderValue("If-Modified-Since", request) + "\n" +
-               GetHeaderValue("If-Match", request) + "\n" +
-               GetHeaderValue("If-None-Match", request) + "\n" +
-               GetHeaderValue("If-Unmodified-Since", request) + "\n" +
-               GetHeaderValue("Range", request) + "\n" +
-               CanonicalizedHeaders(request) + "\n" +
-               CanonicalizedResources(request);
+                                  request.Content?.Headers.ContentEncoding + "\n" +
+                                  request.Content?.Headers.ContentLanguage + "\n" +
+                                  (request.Content?.Headers.ContentLength > 0 ? request.Content?.Headers.ContentLength?.ToString() : "") + "\n" +
+                                  request.Content?.Headers.ContentMD5 + "\n" +
+                                  request.Content?.Headers.ContentType + "\n" +
+                                  request.Headers.Date?.UtcDateTime.ToString("R") + "\n" +
+                                  request.Headers.IfModifiedSince?.UtcDateTime.ToString("R") + "\n" +
+                                  request.Headers.IfMatch + "\n" +
+                                  request.Headers.IfNoneMatch + "\n" +
+                                  request.Headers.IfUnmodifiedSince?.UtcDateTime.ToString("R") + "\n" +
+                                  request.Headers.Range + "\n" +
+                                  CanonicalizedHeaders(request) + "\n" +
+                                  CanonicalizedResources(request);
 
             // Sign signature and add as header
             string signature = Convert.ToBase64String(cryptographic.HMACSHA256(Convert.FromBase64String(Configuration.AccountKey), Encoding.UTF8.GetBytes(stringToSign)));
@@ -339,54 +349,22 @@
             return response;
         }
 
-        private string GetHeaderValue(string header, HttpRequestMessage request)
-        {
-            if (header == null)
-                throw new ArgumentNullException(nameof(header));
-
-            if (request == null)
-                throw new ArgumentNullException(nameof(request));
-
-            if (header.StartsWith("Content", StringComparison.OrdinalIgnoreCase))
-            {
-                if (request.Content == null)
-                    return "";
-
-                IEnumerable<string> values;
-                if (request.Content.Headers.TryGetValues(header, out values))
-                {
-                    return values.First();
-                }
-                else
-                {
-                    return "";
-                }
-            }
-            else
-            {
-                IEnumerable<string> values;
-                if (HttpClient.DefaultRequestHeaders.TryGetValues(header, out values))
-                {
-                    return values.First();
-                }
-                else if (request.Headers.TryGetValues(header, out values))
-                {
-                    return values.First();
-                }
-                else
-                {
-                    return "";
-                }
-            }
-        }
-
         private string CanonicalizedHeaders(HttpRequestMessage request)
         {
             List<string> headers = HttpClient.DefaultRequestHeaders.Concat(request.Headers).Select(x => x.Key.ToLower()).Distinct().ToList();
             headers.RemoveAll(x => !x.StartsWith("x-ms-")); // Remove all none x-ms- headers
             headers.Sort(); // This is suppose to be lexicographically 
 
-            return string.Join("\n", headers.Select(header => (header + ":" + GetHeaderValue(header, request).Replace('\n', ' ')).Trim()));
+            return string.Join("\n", headers.Select(header => 
+            {
+                IEnumerable<string> values;
+                if (!request.Headers.TryGetValues(header, out values))
+                {
+                    values = HttpClient.DefaultRequestHeaders.GetValues(header);
+                }
+
+                return header + ":" + values.Single().Replace('\n', ' ').Trim();
+            }));
         }
 
         private string CanonicalizedResources(HttpRequestMessage request)
@@ -394,14 +372,14 @@
             List<string> queryParameters = request.RequestUri.Query.TrimStart('?').Split(new char[] { '&' }, StringSplitOptions.RemoveEmptyEntries).Select(x => Uri.UnescapeDataString(x.ToLower())).ToList();
             queryParameters.Sort();
 
-            string resourcePath = "/" + Configuration.AccountName.Trim() + request.RequestUri.AbsolutePath + "\n"; 
+            string resourcePath = "/" + Configuration.AccountName.Trim() + request.RequestUri.AbsolutePath; 
 
             if (queryParameters.Any())
             {
                 var queryParameterDict = queryParameters.ToLookup(x => x.Split('=')[0], x => x.Split('=')[1]);
                 string query = string.Join("\n", queryParameterDict.Select(x => x.Key + ":" + string.Join(",", x)));
 
-                resourcePath += query;
+                resourcePath += "\n" + query;
             }
 
             return resourcePath;
