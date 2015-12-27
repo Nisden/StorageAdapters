@@ -8,5 +8,7 @@
 
     public class AzureFileInfo : Generic.GenericFileInfo
     {
+        public string BlobType { get; set; }
+        public string MD5 { get; set; }
     }
 }

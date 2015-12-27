@@ -138,9 +138,20 @@
             }
         }
 
-        public override Task<IVirtualFileInfo> GetFileAsync(string path, CancellationToken cancellationToken)
+        public override async Task<IVirtualFileInfo> GetFileAsync(string path, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            var request = new HttpRequestMessage(HttpMethod.Head, path);
+            var response = await SendRequest(request, cancellationToken);
+
+            return new AzureFileInfo()
+            {
+                Name = PathUtility.GetFileName(Configuration.DirectorySeperator, path),
+                LastModified = DateTimeOffset.ParseExact(response.Headers.GetValues("Last-Modified").Single(), "R", System.Globalization.CultureInfo.InvariantCulture),
+                Path = PathUtility.Clean(Configuration.DirectorySeperator, path),
+                Size = long.Parse(response.Headers.GetValues("Content-Length").Single()),
+                MD5 = response.Headers.GetValues("Content-MD5").Single(),
+                BlobType = response.Headers.GetValues("x-ms-blob-type").Single()
+            };
         }
 
         public override async Task<IEnumerable<IVirtualFileInfo>> GetFilesAsync(string path, CancellationToken cancellationToken)
@@ -175,9 +186,22 @@
             throw new NotImplementedException();
         }
 
-        public override Task SaveFileAsync(string path, Stream stream, CancellationToken cancellationToken)
+        public override async Task SaveFileAsync(string path, Stream stream, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            // Put for Block Blobs smaller then 64mb can be done in a single operation
+            // Larger then 64mb, append operations must be used
+            if (stream.Length < 64000000)
+            {
+                var request = new HttpRequestMessage(HttpMethod.Put, EncodePath(path));
+                request.Content = new StreamContent(stream);
+                request.Headers.Add("x-ms-blob-type", "BlockBlob");
+
+                await SendRequest(request, cancellationToken);
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }
         }
 
         #endregion
@@ -367,7 +391,7 @@
 
         private string CanonicalizedResources(HttpRequestMessage request)
         {
-            List<string> queryParameters = request.RequestUri.Query.TrimStart('?').Split('&').Select(x => Uri.UnescapeDataString(x.ToLower())).ToList();
+            List<string> queryParameters = request.RequestUri.Query.TrimStart('?').Split(new char[] { '&' }, StringSplitOptions.RemoveEmptyEntries).Select(x => Uri.UnescapeDataString(x.ToLower())).ToList();
             queryParameters.Sort();
 
             string resourcePath = "/" + Configuration.AccountName.Trim() + request.RequestUri.AbsolutePath + "\n"; 
