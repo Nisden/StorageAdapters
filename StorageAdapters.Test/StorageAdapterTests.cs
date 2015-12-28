@@ -74,6 +74,13 @@
         public async Task DeleteDirectory(string directoryName)
         {
             await StorageAdapter.CreateDirectoryAsync(StorageAdapter.PathCombine(TestPath, directoryName));
+
+            // Folders must have a file for a directory to be "created" on the Azure Storage Adapter
+            using (MemoryStream ms = new MemoryStream(new byte[0]))
+            {
+                await StorageAdapter.SaveFileAsync(StorageAdapter.PathCombine(TestPath, directoryName, "empty.txt"), ms);
+            }
+
             await StorageAdapter.DeleteDirectoryAsync(StorageAdapter.PathCombine(TestPath, directoryName));
         }
 

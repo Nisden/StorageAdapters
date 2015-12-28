@@ -69,16 +69,38 @@
             if (path == null)
                 throw new ArgumentNullException(nameof(path));
 
-            string[] pathParts = path.Split(Configuration.DirectorySeperator);
+            string[] pathParts = PathUtility.Clean(Configuration.DirectorySeperator, path).Split(Configuration.DirectorySeperator);
+            string containerName = pathParts[0];
+            string directoryPath = string.Join(Configuration.DirectorySeperator.ToString(), pathParts.Skip(1)) + "/";
 
             if (pathParts.Length == 1)
             {
-                await DeleteContainerAsync(pathParts[0], cancellationToken).ConfigureAwait(false);
+                await DeleteContainerAsync(containerName, cancellationToken).ConfigureAwait(false);
             }
             else
             {
                 // Delete all blobls with matching prefix
-                throw new NotImplementedException("Recursive deletion of blobs are unimplemented");
+                List<string> files = new List<string>();
+                string nextMarker = string.Empty;
+                do
+                {
+                    var request = new HttpRequestMessage(HttpMethod.Get, $"{containerName}?restype=container&comp=list&marker={Uri.EscapeDataString(nextMarker)}&prefix={Uri.EscapeDataString(directoryPath)}");
+                    var response = await SendRequest(request, cancellationToken);
+                    var responseDocument = System.Xml.Linq.XDocument.Parse(await response.Content.ReadAsStringAsync());
+
+                    files.AddRange(from blob in responseDocument.Root.Element("Blobs").Elements("Blob")
+                                   let properties = blob.Element("Properties")
+                                   select blob.Element("Name").Value);
+
+                    // Get the next marker from the current response
+                    nextMarker = responseDocument.Root.Element("NextMarker").Value;
+                }
+                while (!string.IsNullOrEmpty(nextMarker));
+
+                if (!files.Any())
+                    throw new NotFoundException(string.Format(Exceptions.DirectoryNotFound, path));
+
+                await Task.WhenAll(files.Select(fileName => DeleteFileAsync(PathUtility.Combine(Configuration.DirectorySeperator, containerName, fileName), cancellationToken)));
             }
         }
 
