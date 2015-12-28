@@ -369,14 +369,14 @@
 
         private string CanonicalizedResources(HttpRequestMessage request)
         {
-            List<string> queryParameters = request.RequestUri.Query.TrimStart('?').Split(new char[] { '&' }, StringSplitOptions.RemoveEmptyEntries).Select(x => Uri.UnescapeDataString(x.ToLower())).ToList();
+            List<string> queryParameters = request.RequestUri.Query.TrimStart('?').Split(new char[] { '&' }, StringSplitOptions.RemoveEmptyEntries).Select(x => Uri.UnescapeDataString(x)).ToList();
             queryParameters.Sort();
 
             string resourcePath = "/" + Configuration.AccountName.Trim() + request.RequestUri.AbsolutePath; 
 
             if (queryParameters.Any())
             {
-                var queryParameterDict = queryParameters.ToLookup(x => x.Split('=')[0], x => x.Split('=')[1]);
+                var queryParameterDict = queryParameters.ToLookup(x => x.Split('=')[0].ToLower(), x => x.Split('=')[1]);
                 string query = string.Join("\n", queryParameterDict.Select(x => x.Key + ":" + string.Join(",", x)));
 
                 resourcePath += "\n" + query;
