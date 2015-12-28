@@ -13,14 +13,15 @@ All methods except changing the configuration should be thread safe.
 
 # Supported platforms
 
-| Project                        | .NET 4.5     | Windows Store 8  | Windows Store 8.1 | Windows Phone Store 8.1 | Windows Universal 10.0
-| -------------------------------|--------------|------------------|-------------------|-------------------------|----------------------------
-| StorageAdapters                | ✓            | ✓               | ✓                 | ✓                       | ✓
-| StorageAdapters.InMemory       | ✓            | ✓               | ✓                 | ✓                       | ✓
-| StorageAdapters.WebDAV         | ✓            | ✓               | ✓                 | ✓                       | ✓
-| StorageAdapters.Azure          | ✓            |                  | ✓                 | ✓                      | ✓
-| StorageAdapters.FTP (WIP)      | (✓)          |                  | ✓                 | ✓                      | ✓
-| StorageAdapters.IO             | ✓            |                  |                   |                         |
+| Project                                                          | .NET 4.5     | Windows Store 8  | Windows Store 8.1 | Windows Phone Store 8.1 | Windows Universal 10.0
+| -----------------------------------------------------------------|--------------|------------------|-------------------|-------------------------|----------------------------
+| StorageAdapters                                                  | ✓            | ✓               | ✓                 | ✓                       | ✓
+| StorageAdapters.InMemory                                         | ✓            | ✓               | ✓                 | ✓                       | ✓
+| StorageAdapters.WebDAV                                           | ✓            | ✓               | ✓                 | ✓                       | ✓
+| [StorageAdapters.BackBlaze](https://www.backblaze.com/b2/docs/)  | ✓            | ✓               | ✓                 | ✓                       | ✓
+| StorageAdapters.Azure                                            | ✓            |                  | ✓                 | ✓                      | ✓
+| StorageAdapters.FTP (WIP)                                        | (✓)          |                  | ✓                 | ✓                      | ✓
+| StorageAdapters.IO                                               | ✓            |                  |                   |                         |
 
 (✓) Not implemented yet
 
