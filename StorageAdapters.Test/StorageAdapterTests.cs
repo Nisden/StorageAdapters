@@ -55,7 +55,14 @@
 
             foreach (var subFolder in subFolders)
             {
-                await StorageAdapter.CreateDirectoryAsync(StorageAdapter.PathCombine(TestPath, directoryName, subFolder));
+                string subFolderPath = StorageAdapter.PathCombine(TestPath, directoryName, subFolder);
+                await StorageAdapter.CreateDirectoryAsync(subFolderPath);
+
+                // Folders must have a file for a directory to be "created" on the Azure Storage Adapter
+                using (MemoryStream ms = new MemoryStream(new byte[0]))
+                {
+                    await StorageAdapter.SaveFileAsync(StorageAdapter.PathCombine(subFolderPath, "empty.txt"), ms);
+                }
             }
 
             Assert.Equal(subFolders.Length, (await StorageAdapter.GetDirectoriesAsync(StorageAdapter.PathCombine(TestPath, directoryName))).Count());

@@ -140,10 +140,31 @@
             }
             else
             {
-                var pathParts = path.Split(Configuration.DirectorySeperator);
+                string[] pathParts = PathUtility.Clean(Configuration.DirectorySeperator, path).Split(Configuration.DirectorySeperator);
+                string containerName = pathParts[0];
+                string directoryPath = string.Join(Configuration.DirectorySeperator.ToString(), pathParts.Skip(1)) + "/";
 
-                // TODO: How the hell will i solve this one? The delimiter and prefix stuff stops from going deeper.
-                throw new NotImplementedException();
+                List<AzureDirectory> directories = new List<AzureDirectory>();
+                string nextMarker = string.Empty;
+                do
+                {
+                    var request = new HttpRequestMessage(HttpMethod.Get, $"{containerName}?restype=container&comp=list&marker={Uri.EscapeDataString(nextMarker)}&prefix={Uri.EscapeDataString(directoryPath)}&delimiter={Configuration.DirectorySeperator}");
+                    var response = await SendRequest(request, cancellationToken);
+                    var responseDocument = System.Xml.Linq.XDocument.Parse(await response.Content.ReadAsStringAsync());
+
+                    directories.AddRange(from blob in responseDocument.Root.Element("Blobs").Elements("BlobPrefix")
+                                         select new AzureDirectory()
+                                         {
+                                             Name = blob.Element("Name").Value,
+                                             Path = Path.Combine(path, blob.Element("Name").Value)
+                                         });
+
+                    // Get the next marker from the current response
+                    nextMarker = responseDocument.Root.Element("NextMarker").Value;
+                }
+                while (!string.IsNullOrEmpty(nextMarker));
+
+                return directories;
             }
         }
 
@@ -165,25 +186,30 @@
 
         public override async Task<IEnumerable<IVirtualFileInfo>> GetFilesAsync(string path, CancellationToken cancellationToken)
         {
+            string[] pathParts = PathUtility.Clean(Configuration.DirectorySeperator, path).Split(Configuration.DirectorySeperator);
+            string containerName = pathParts[0];
+            string directoryPath = string.Join(Configuration.DirectorySeperator.ToString(), pathParts.Skip(1)) + "/";
+
             List<AzureFileInfo> files = new List<AzureFileInfo>();
             string nextMarker = string.Empty;
             do
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, $"{path.Split('/', '\\')[0]}?restype=container&comp=list&marker={Uri.EscapeDataString(nextMarker)}&prefix={Uri.EscapeDataString(path)}&delimiter={Configuration.DirectorySeperator}");
+                var request = new HttpRequestMessage(HttpMethod.Get, $"{containerName}?restype=container&comp=list&marker={Uri.EscapeDataString(nextMarker)}&prefix={Uri.EscapeDataString(directoryPath)}&delimiter={Configuration.DirectorySeperator}");
                 var response = await SendRequest(request, cancellationToken);
                 var responseDocument = System.Xml.Linq.XDocument.Parse(await response.Content.ReadAsStringAsync());
 
-                files.AddRange(from file in responseDocument.Element("Blobs").Elements("Blob")
+                files.AddRange(from blob in responseDocument.Root.Element("Blobs").Elements("Blob")
+                               let properties = blob.Element("Properties")
                                select new AzureFileInfo()
                                {
-                                   Path = file.Element("Name").Value,
-                                   Name = PathUtility.GetFileName(Configuration.DirectorySeperator, file.Element("Name").Value),
-                                   Size = long.Parse(file.Element("Content-Length").Value),
-                                   LastModified = DateTime.ParseExact(file.Element("Last-Modified").Value, "R", System.Globalization.CultureInfo.InvariantCulture)
+                                   Path = blob.Element("Name").Value,
+                                   Name = PathUtility.GetFileName(Configuration.DirectorySeperator, blob.Element("Name").Value),
+                                   Size = long.Parse(properties.Element("Content-Length").Value),
+                                   LastModified = DateTime.ParseExact(properties.Element("Last-Modified").Value, "R", System.Globalization.CultureInfo.InvariantCulture)
                                });
                 
                 // Get the next marker from the current response
-                nextMarker = responseDocument.Element("NextMarker").Value;
+                nextMarker = responseDocument.Root.Element("NextMarker").Value;
             }
             while (!string.IsNullOrEmpty(nextMarker));
 
