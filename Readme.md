@@ -18,7 +18,7 @@ All methods except changing the configuration should be thread safe.
 | StorageAdapters                | ✓            | ✓               | ✓                 | ✓                       | ✓
 | StorageAdapters.InMemory       | ✓            | ✓               | ✓                 | ✓                       | ✓
 | StorageAdapters.WebDAV         | ✓            | ✓               | ✓                 | ✓                       | ✓
-| StorageAdapters.Azure (WIP)    | ✓            |                  | ✓                 | ✓                      | ✓
+| StorageAdapters.Azure          | ✓            |                  | ✓                 | ✓                      | ✓
 | StorageAdapters.FTP (WIP)      | (✓)          |                  | ✓                 | ✓                      | ✓
 | StorageAdapters.IO             | ✓            |                  |                   |                         |
 
@@ -29,6 +29,7 @@ All methods except changing the configuration should be thread safe.
 * **WebDAV** can not have files without extensions.
 * **WebDAV** deletes are always recursive.
 * **Azure** sub directories always exist
+* **Azure** you can only delete a directory when it contains files
 * **IO** can not have a filename longer then 255 characters.
 
 
