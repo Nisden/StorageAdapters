@@ -4,13 +4,13 @@
 
     public class GenericFileInfo : IVirtualFileInfo
     {
-        public string Name { get; set; }
+        public virtual string Name { get; set; }
 
-        public string Path { get; set; }
+        public virtual string Path { get; set; }
         
-        public long Size { get; set; }
+        public virtual long Size { get; set; }
 
-        public DateTimeOffset LastModified { get; set; }
+        public virtual DateTimeOffset LastModified { get; set; }
 
         public override string ToString()
         {

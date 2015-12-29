@@ -4,6 +4,7 @@
     using System;
     using System.IO;
     using System.Linq;
+    using System.Text;
     using System.Threading.Tasks;
     using Xunit;
 
@@ -92,7 +93,7 @@
         }
 
         [Theory]
-        [InlineData("CreateDirectoryWithFiles_1", new string[] { "test test.txt", "test+.pdf", "øæå.docx", "xyz.jpeg"})]
+        [InlineData("CreateDirectoryWithFiles_1", new string[] { "test test.txt", "test+.pdf", "øæå.docx", "xyz.jpeg" })]
         [InlineData("CreateDirectoryWithFiles Test", new string[] { "test test.txt", "test+.pdf", "øæå.docx", "xyz.jpeg" })]
         public async Task CreateDirectoryWithFiles(string directoryName, string[] fileNames)
         {
@@ -214,6 +215,37 @@
             Assert.EndsWith(fileInfo.Name, fileInfo.Path);
             Assert.True(fileInfo.LastModified > DateTimeOffset.Now.AddDays(-1));
             Assert.Equal(10, fileInfo.Size);
+        }
+
+        [Fact]
+        public async Task AppendExistingFile()
+        {
+            string fileName = StorageAdapter.PathCombine(TestPath, "AppendExistingFile.txt");
+            using (MemoryStream ms = new MemoryStream(Encoding.UTF8.GetBytes("Test")))
+            {
+                await StorageAdapter.SaveFileAsync(fileName, ms);
+            }
+
+            await StorageAdapter.AppendFileAsync(fileName, Encoding.UTF8.GetBytes("_Test"));
+
+            using (var fileStream = new StreamReader(await StorageAdapter.ReadFileAsync(fileName), Encoding.UTF8))
+            {
+                Assert.Equal("Test_Test", await fileStream.ReadToEndAsync());
+            }
+        }
+
+        [Fact]
+        public async Task CreateFileWithAppend()
+        {
+            string fileName = StorageAdapter.PathCombine(TestPath, "CreateFileWithAppend.txt");
+
+            await StorageAdapter.AppendFileAsync(fileName, Encoding.UTF8.GetBytes("Test"));
+            await StorageAdapter.AppendFileAsync(fileName, Encoding.UTF8.GetBytes("_Test"));
+
+            using (var fileStream = new StreamReader(await StorageAdapter.ReadFileAsync(fileName), Encoding.UTF8))
+            {
+                Assert.Equal("Test_Test", await fileStream.ReadToEndAsync());
+            }
         }
 
         [Fact]

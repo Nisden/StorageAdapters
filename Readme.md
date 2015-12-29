@@ -26,11 +26,12 @@ All methods except changing the configuration should be thread safe.
 
 ## Limitations
 
-* **WebDAV** can not have files without extensions.
-* **WebDAV** deletes are always recursive.
+* **WebDAV** can not have files without extensions
+* **WebDAV** deletes are always recursive
+* **WebDAV** append is not implemented
 * **Azure** sub directories always exist
 * **Azure** you can only delete a directory when it contains files
-* **IO** can not have a filename longer then 255 characters.
+* **IO** can not have a filename longer then 255 characters
 
 
 # Structure and Responsiblities

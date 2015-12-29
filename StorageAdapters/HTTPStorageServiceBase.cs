@@ -53,6 +53,7 @@
         public abstract Task<IEnumerable<IVirtualFileInfo>> GetFilesAsync(string path, CancellationToken cancellationToken);
         public abstract Task<Stream> ReadFileAsync(string path, CancellationToken cancellationToken);
         public abstract Task SaveFileAsync(string path, Stream stream, CancellationToken cancellationToken);
+        public abstract Task AppendFileAsync(string path, byte[] buffer, int offset, int count, CancellationToken cancellationToken);
 
         protected virtual void ConfigureHttpClientHandler(HttpClientHandler clientHandler)
         { }

@@ -262,6 +262,11 @@
             }
         }
 
+        public override Task AppendFileAsync(string path, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
+
         #endregion
 
         #region AzureStorageService

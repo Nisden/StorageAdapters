@@ -207,6 +207,11 @@
             HandleErrorStatus(response, path, true);
         }
 
+        public override Task AppendFileAsync(string path, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
+
         protected override void ConfigureHttpClientHandler(HttpClientHandler clientHandler)
         {
             // Create credentials

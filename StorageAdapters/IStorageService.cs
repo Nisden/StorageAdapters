@@ -21,6 +21,8 @@
 
         Task SaveFileAsync(string path, Stream stream, CancellationToken cancellationToken);
 
+        Task AppendFileAsync(string path, byte[] buffer, int offset, int count, CancellationToken cancellationToken);
+
         Task DeleteFileAsync(string path, CancellationToken cancellationToken);
 
         Task CreateDirectoryAsync(string path, CancellationToken cancellationToken);

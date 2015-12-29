@@ -38,6 +38,10 @@
         Task SaveFileAsync(string path, Stream stream);
         Task SaveFileAsync(string path, Stream stream, CancellationToken cancellationToken);
 
+        Task AppendFileAsync(string path, byte[] buffer);
+        Task AppendFileAsync(string path, byte[] buffer, CancellationToken cancellationToken);
+        Task AppendFileAsync(string path, byte[] buffer, int offset, int count, CancellationToken cancellationToken);
+
         Task DeleteFileAsync(string path);
         Task DeleteFileAsync(string path, CancellationToken cancellationToken);
 

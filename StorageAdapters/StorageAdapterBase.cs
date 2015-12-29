@@ -142,6 +142,36 @@
             return service.SaveFileAsync(PathClean(path, true), stream, cancellationToken);
         }
 
+        public async Task AppendFileAsync(string path, byte[] buffer)
+        {
+            using (var tokenSource = CreateDefaultTimeoutToken())
+            {
+                await this.AppendFileAsync(path, buffer, tokenSource.Token);
+            }
+        }
+
+        public async Task AppendFileAsync(string path, byte[] buffer, CancellationToken cancellationToken)
+        {
+            await this.AppendFileAsync(path, buffer, 0, buffer.Length, cancellationToken);
+        }
+
+        public async Task AppendFileAsync(string path, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            if (path == null)
+                throw new ArgumentNullException(nameof(path));
+
+            if (buffer == null)
+                throw new ArgumentNullException(nameof(buffer));
+
+            if (offset > buffer.Length)
+                throw new ArgumentOutOfRangeException(nameof(offset));
+
+            if (count > buffer.Length)
+                throw new ArgumentOutOfRangeException(nameof(count));
+
+            await this.Service.AppendFileAsync(path, buffer, offset, count, cancellationToken);
+        }
+
         public async Task DeleteFileAsync(string path)
         {
             using (var tokenSource = CreateDefaultTimeoutToken())

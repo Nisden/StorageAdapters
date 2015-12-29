@@ -224,6 +224,32 @@
             {
                 throw new UnauthorizedException(ex.Message, ex);
             }
+            catch (DirectoryNotFoundException ex)
+            {
+                throw new NotFoundException(string.Format(Exceptions.FileNotFound, path), ex);
+            }
+        }
+
+        public async Task AppendFileAsync(string path, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            if (Configuration == null)
+                throw new InvalidOperationException(Exceptions.ConfigurationMustBeSet);
+
+            try
+            {
+                using (var fileStream = File.Open(GetFullPath(path), FileMode.Append, FileAccess.Write, FileShare.Read))
+                {
+                    await fileStream.WriteAsync(buffer, offset, count);
+                }
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw new UnauthorizedException(ex.Message, ex);
+            }
+            catch (DirectoryNotFoundException ex)
+            {
+                throw new NotFoundException(string.Format(Exceptions.FileNotFound, path), ex);
+            }
         }
 
         public Task<bool> FileExistAsync(string path, CancellationToken cancellationToken)

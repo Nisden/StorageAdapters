@@ -75,7 +75,7 @@
                 if (!storage.TryGetValue(path, out currentDirectory))
                     throw new NotFoundException(string.Format(Exceptions.DirectoryNotFound, path));
 
-                return storage.Keys.Where(x => 
+                return storage.Keys.Where(x =>
                 x.StartsWith(path) && // Key should start with the path
                 x.Length > path.Length && // And be longer then the current path
                 x.IndexOf(Configuration.DirectorySeperator, path.Length + 1) == -1) // But not contain anymore Seperators
@@ -84,7 +84,7 @@
                     Name = PathUtility.GetDirectoryName(Configuration.DirectorySeperator, x),
                     Path = x
                 });
-                
+
             }).ConfigureAwait(false);
         }
 
@@ -146,6 +146,42 @@
             }
         }
 
+        public async Task AppendFileAsync(string path, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            await Task.Factory.StartNew(() =>
+            {
+                ConcurrentDictionary<string, InMemoryFile> currentDirectory;
+                if (!storage.TryGetValue(PathUtility.GetDirectoryName(Configuration.DirectorySeperator, path), out currentDirectory))
+                    throw new NotFoundException(string.Format(Exceptions.DirectoryNotFound, path));
+
+                string fileName = PathUtility.GetFileName(Configuration.DirectorySeperator, path);
+
+                currentDirectory.AddOrUpdate(fileName,
+                    (x) =>
+                    {
+                        byte[] data = new byte[count];
+                        Array.Copy(buffer, offset, data, 0, count);
+                        return new InMemoryFile()
+                        {
+                            Name = fileName,
+                            Path = path,
+                            LastModified = DateTimeOffset.Now,
+                            Data = data
+                        };
+                    },
+                    (x, existing) =>
+                    {
+                        byte[] data = existing.Data;
+                        Array.Resize(ref data, data.Length + count);
+                        Array.Copy(buffer, offset, data, data.Length - count, count);
+
+                        existing.Data = data;
+                        existing.LastModified = DateTimeOffset.Now;
+                        return existing;
+                    });
+            }).ConfigureAwait(false);
+        }
+
         public void Dispose()
         {
         }
@@ -153,6 +189,14 @@
         private class InMemoryFile : Generic.GenericFileInfo
         {
             public byte[] Data { get; set; }
+
+            public override long Size
+            {
+                get
+                {
+                    return Data.Length;
+                }
+            }
         }
     }
 }
