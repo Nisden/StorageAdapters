@@ -10,6 +10,7 @@
     using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
+    using System.Xml.Linq;
 
     public sealed class AzureStorageService : HTTPStorageServiceBase<AzureConfiguration>
     {
@@ -134,7 +135,7 @@
                     return false;
                 }
             }
-            
+
         }
 
         public override async Task<bool> FileExistAsync(string path, CancellationToken cancellationToken)
@@ -201,7 +202,6 @@
                 LastModified = response.Content.Headers.LastModified.Value,
                 Path = PathUtility.Clean(Configuration.DirectorySeperator, path),
                 Size = response.Content.Headers.ContentLength.GetValueOrDefault(),
-                MD5 = Convert.ToBase64String(response.Content.Headers.ContentMD5),
                 BlobType = response.Headers.GetValues("x-ms-blob-type").Single()
             };
         }
@@ -229,7 +229,7 @@
                                    Size = long.Parse(properties.Element("Content-Length").Value),
                                    LastModified = DateTime.ParseExact(properties.Element("Last-Modified").Value, "R", System.Globalization.CultureInfo.InvariantCulture)
                                });
-                
+
                 // Get the next marker from the current response
                 nextMarker = responseDocument.Root.Element("NextMarker").Value;
             }
@@ -246,25 +246,79 @@
 
         public override async Task SaveFileAsync(string path, Stream stream, CancellationToken cancellationToken)
         {
-            // Put for Block Blobs smaller then 64mb can be done in a single operation
-            // Larger then 64mb, append operations must be used
-            if (stream.Length < 64000000)
+            // If the file exists, delete it.
+            if (await (FileExistAsync(path, cancellationToken)))
             {
-                var request = new HttpRequestMessage(HttpMethod.Put, EncodePath(path));
-                request.Content = new StreamContent(new UncloseableStream(stream));
-                request.Headers.Add("x-ms-blob-type", "BlockBlob");
-
-                await SendRequest(request, cancellationToken);
+                await DeleteFileAsync(path, cancellationToken);
             }
             else
             {
-                throw new NotImplementedException();
+                // Create a new empty block blob
+                var createRequest = new HttpRequestMessage(HttpMethod.Put, EncodePath(path));
+                createRequest.Headers.Add("x-ms-blob-type", "BlockBlob");
+                await SendRequest(createRequest, cancellationToken);
             }
+
+            // Use the append method to upload parts
+            int count;
+            byte[] buffer = new byte[4000000];
+            List<string> blockIds = new List<string>();
+            while ((count = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            {
+                blockIds.Add(await PutBlock(path, buffer, 0, count, cancellationToken));
+            }
+
+            await PutBlockList(path, blockIds, cancellationToken);
         }
 
-        public override Task AppendFileAsync(string path, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        public async override Task AppendFileAsync(string path, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            if (count > 4000000)
+                throw new StorageAdapterException(); // TODO: Messages
+
+            IEnumerable<string> existingBlockIds;
+            try
+            {
+                // Get existing block list
+                var blockListResponse = await SendRequest(new HttpRequestMessage(HttpMethod.Get, EncodePath(path) + "?comp=blocklist&blocklisttype=committed"), cancellationToken);
+                var blockListDocument = System.Xml.Linq.XDocument.Parse(await blockListResponse.Content.ReadAsStringAsync());
+                existingBlockIds = from block in blockListDocument.Root.Element("CommittedBlocks").Elements("Block")
+                                       select block.Element("Name").Value;
+            }
+            catch (NotFoundException)
+            {
+                // If the file don't exist create a new one instead
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    ms.Write(buffer, offset, count);
+                    ms.Seek(0, SeekOrigin.Begin);
+                    await SaveFileAsync(path, ms, cancellationToken);
+                    return;
+                }
+            }
+
+            // Upload the block
+            string blockId = await PutBlock(path, buffer, offset, count, cancellationToken);
+
+            // Saves the new block list
+            await PutBlockList(path, existingBlockIds.Concat(new string[] { blockId }), cancellationToken);
+        }
+
+        private async Task<string> PutBlock(string path, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            string blockId = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+            var request = new HttpRequestMessage(HttpMethod.Put, EncodePath(path) + $"?comp=block&blockId={Uri.EscapeDataString(blockId)}");
+            request.Content = new ByteArrayContent(buffer, offset, count);
+            await SendRequest(request, cancellationToken);
+
+            return blockId;
+        }
+
+        private async Task PutBlockList(string path, IEnumerable<string> blockIds, CancellationToken cancellationToken)
+        {
+            var putBlockListRequest = new HttpRequestMessage(HttpMethod.Put, EncodePath(path) + "?comp=blocklist");
+            putBlockListRequest.Content = new StringContent(new XDocument(new XElement("BlockList", blockIds.Select(x => new XElement("Latest", x)))).ToString());
+            await SendRequest(putBlockListRequest, cancellationToken);
         }
 
         #endregion
@@ -326,7 +380,7 @@
             while (!string.IsNullOrEmpty(nextMarker));
 
             return containers;
-        } 
+        }
 
         public async Task DeleteContainerAsync(string containerName, CancellationToken cancellationToken)
         {
@@ -408,7 +462,7 @@
             headers.RemoveAll(x => !x.StartsWith("x-ms-")); // Remove all none x-ms- headers
             headers.Sort(); // This is suppose to be lexicographically 
 
-            return string.Join("\n", headers.Select(header => 
+            return string.Join("\n", headers.Select(header =>
             {
                 IEnumerable<string> values;
                 if (!request.Headers.TryGetValues(header, out values))
@@ -425,11 +479,11 @@
             List<string> queryParameters = request.RequestUri.Query.TrimStart('?').Split(new char[] { '&' }, StringSplitOptions.RemoveEmptyEntries).Select(x => Uri.UnescapeDataString(x)).ToList();
             queryParameters.Sort();
 
-            string resourcePath = "/" + Configuration.AccountName.Trim() + request.RequestUri.AbsolutePath; 
+            string resourcePath = "/" + Configuration.AccountName.Trim() + request.RequestUri.AbsolutePath;
 
             if (queryParameters.Any())
             {
-                var queryParameterDict = queryParameters.ToLookup(x => x.Split('=')[0].ToLower(), x => x.Split('=')[1]);
+                var queryParameterDict = queryParameters.ToLookup(x => x.Split('=')[0].ToLower(), x => x.Substring(x.IndexOf("=") + 1));
                 string query = string.Join("\n", queryParameterDict.Select(x => x.Key + ":" + string.Join(",", x)));
 
                 resourcePath += "\n" + query;
@@ -439,4 +493,3 @@
         }
     }
 }
- 

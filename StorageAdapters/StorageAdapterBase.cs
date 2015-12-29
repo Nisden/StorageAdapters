@@ -123,15 +123,15 @@
             return service.ReadFileAsync(PathClean(path, true), cancellationToken);
         }
 
-        public Task SaveFileAsync(string path, Stream stream)
+        public async Task SaveFileAsync(string path, Stream stream)
         {
             using (var tokenSource = CreateDefaultTimeoutToken())
             {
-                return this.SaveFileAsync(path, stream, tokenSource.Token);
+                await this.SaveFileAsync(path, stream, tokenSource.Token);
             }
         }
 
-        public virtual Task SaveFileAsync(string path, Stream stream, CancellationToken cancellationToken)
+        public async virtual Task SaveFileAsync(string path, Stream stream, CancellationToken cancellationToken)
         {
             if (path == null)
                 throw new ArgumentNullException(nameof(path));
@@ -139,7 +139,7 @@
             if (stream == null)
                 throw new ArgumentNullException(nameof(stream));
 
-            return service.SaveFileAsync(PathClean(path, true), stream, cancellationToken);
+            await service.SaveFileAsync(PathClean(path, true), stream, cancellationToken);
         }
 
         public async Task AppendFileAsync(string path, byte[] buffer)
