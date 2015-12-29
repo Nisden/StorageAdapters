@@ -53,6 +53,9 @@
 
         public override async Task CreateDirectoryAsync(string path, CancellationToken cancellationToken)
         {
+            if (Configuration == null)
+                throw new InvalidOperationException(Exceptions.ConfigurationMustBeSet);
+
             if (path == null)
                 throw new ArgumentNullException(nameof(path));
 
@@ -67,6 +70,9 @@
 
         public override async Task DeleteDirectoryAsync(string path, CancellationToken cancellationToken)
         {
+            if (Configuration == null)
+                throw new InvalidOperationException(Exceptions.ConfigurationMustBeSet);
+
             if (path == null)
                 throw new ArgumentNullException(nameof(path));
 
@@ -107,11 +113,20 @@
 
         public override async Task DeleteFileAsync(string path, CancellationToken cancellationToken)
         {
+            if (Configuration == null)
+                throw new InvalidOperationException(Exceptions.ConfigurationMustBeSet);
+
+            if (path == null)
+                throw new ArgumentNullException(nameof(path));
+
             await SendRequest(new HttpRequestMessage(HttpMethod.Delete, EncodePath(path)), cancellationToken);
         }
 
         public override async Task<bool> DirectoryExistAsync(string path, CancellationToken cancellationToken)
         {
+            if (Configuration == null)
+                throw new InvalidOperationException(Exceptions.ConfigurationMustBeSet);
+
             if (path == null)
                 throw new ArgumentNullException(nameof(path));
 
@@ -140,6 +155,12 @@
 
         public override async Task<bool> FileExistAsync(string path, CancellationToken cancellationToken)
         {
+            if (Configuration == null)
+                throw new InvalidOperationException(Exceptions.ConfigurationMustBeSet);
+
+            if (path == null)
+                throw new ArgumentNullException(nameof(path));
+
             try
             {
                 await GetFileAsync(path, cancellationToken);
@@ -153,6 +174,12 @@
 
         public override async Task<IEnumerable<IVirtualDirectory>> GetDirectoriesAsync(string path, CancellationToken cancellationToken)
         {
+            if (Configuration == null)
+                throw new InvalidOperationException(Exceptions.ConfigurationMustBeSet);
+
+            if (path == null)
+                throw new ArgumentNullException(nameof(path));
+
             if (PathUtility.IsRootPath(path))
             {
                 return (await GetContainersAsync(cancellationToken).ConfigureAwait(false)).Select(containerName => new AzureDirectory()
@@ -193,6 +220,12 @@
 
         public override async Task<IVirtualFileInfo> GetFileAsync(string path, CancellationToken cancellationToken)
         {
+            if (Configuration == null)
+                throw new InvalidOperationException(Exceptions.ConfigurationMustBeSet);
+
+            if (path == null)
+                throw new ArgumentNullException(nameof(path));
+
             var request = new HttpRequestMessage(HttpMethod.Head, EncodePath(path));
             var response = await SendRequest(request, cancellationToken);
 
@@ -208,6 +241,12 @@
 
         public override async Task<IEnumerable<IVirtualFileInfo>> GetFilesAsync(string path, CancellationToken cancellationToken)
         {
+            if (Configuration == null)
+                throw new InvalidOperationException(Exceptions.ConfigurationMustBeSet);
+
+            if (path == null)
+                throw new ArgumentNullException(nameof(path));
+
             string[] pathParts = PathUtility.Clean(Configuration.DirectorySeperator, path).Split(Configuration.DirectorySeperator);
             string containerName = pathParts[0];
             string directoryPath = string.Join(Configuration.DirectorySeperator.ToString(), pathParts.Skip(1)) + "/";
@@ -240,12 +279,27 @@
 
         public override async Task<Stream> ReadFileAsync(string path, CancellationToken cancellationToken)
         {
+            if (Configuration == null)
+                throw new InvalidOperationException(Exceptions.ConfigurationMustBeSet);
+
+            if (path == null)
+                throw new ArgumentNullException(nameof(path));
+
             var response = await SendRequest(new HttpRequestMessage(HttpMethod.Get, EncodePath(path)), cancellationToken);
             return await response.Content.ReadAsStreamAsync();
         }
 
         public override async Task SaveFileAsync(string path, Stream stream, CancellationToken cancellationToken)
         {
+            if (Configuration == null)
+                throw new InvalidOperationException(Exceptions.ConfigurationMustBeSet);
+
+            if (path == null)
+                throw new ArgumentNullException(nameof(path));
+
+            if (stream == null)
+                throw new ArgumentNullException(nameof(stream));
+
             // If the file exists, delete it.
             if (await (FileExistAsync(path, cancellationToken)))
             {
@@ -273,8 +327,17 @@
 
         public async override Task AppendFileAsync(string path, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
+            if (Configuration == null)
+                throw new InvalidOperationException(Exceptions.ConfigurationMustBeSet);
+
+            if (path == null)
+                throw new ArgumentNullException(nameof(path));
+
             if (count > 4000000)
                 throw new StorageAdapterException(); // TODO: Messages
+
+            if (buffer == null)
+                throw new ArgumentNullException(nameof(buffer));
 
             IEnumerable<string> existingBlockIds;
             try
@@ -306,6 +369,18 @@
 
         private async Task<string> PutBlock(string path, byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
+            if (Configuration == null)
+                throw new InvalidOperationException(Exceptions.ConfigurationMustBeSet);
+
+            if (path == null)
+                throw new ArgumentNullException(nameof(path));
+
+            if (buffer == null)
+                throw new ArgumentNullException(nameof(buffer));
+
+            if (count > buffer.Length)
+                throw new ArgumentOutOfRangeException(nameof(count));
+
             string blockId = Convert.ToBase64String(Guid.NewGuid().ToByteArray());
             var request = new HttpRequestMessage(HttpMethod.Put, EncodePath(path) + $"?comp=block&blockId={Uri.EscapeDataString(blockId)}");
             request.Content = new ByteArrayContent(buffer, offset, count);
@@ -316,6 +391,12 @@
 
         private async Task PutBlockList(string path, IEnumerable<string> blockIds, CancellationToken cancellationToken)
         {
+            if (Configuration == null)
+                throw new InvalidOperationException(Exceptions.ConfigurationMustBeSet);
+
+            if (path == null)
+                throw new ArgumentNullException(nameof(path));
+
             var putBlockListRequest = new HttpRequestMessage(HttpMethod.Put, EncodePath(path) + "?comp=blocklist");
             putBlockListRequest.Content = new StringContent(new XDocument(new XElement("BlockList", blockIds.Select(x => new XElement("Latest", x)))).ToString());
             await SendRequest(putBlockListRequest, cancellationToken);
@@ -327,11 +408,17 @@
 
         public async Task CreateContainerAsync(string containerName, CancellationToken cancellationToken)
         {
+            if (containerName == null)
+                throw new ArgumentNullException(nameof(containerName));
+
             await CreateContainerAsync(containerName, Configuration.DefaultContainerAccess, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task CreateContainerAsync(string containerName, AzureBlobPublicBlobAccess access, CancellationToken cancellationToken)
         {
+            if (containerName == null)
+                throw new ArgumentNullException(nameof(containerName));
+
             var request = new HttpRequestMessage(HttpMethod.Put, EncodePath(containerName) + "?restype=container");
             if (access != AzureBlobPublicBlobAccess.@private)
             {
@@ -343,6 +430,9 @@
 
         public async Task<bool> ContainerExistAsync(string containerName, CancellationToken cancellationToken)
         {
+            if (containerName == null)
+                throw new ArgumentNullException(nameof(containerName));
+
             try
             {
                 await GetContainerProperties(containerName, cancellationToken);
@@ -356,6 +446,9 @@
 
         public async Task<Dictionary<string, string>> GetContainerProperties(string containerName, CancellationToken cancellationToken)
         {
+            if (containerName == null)
+                throw new ArgumentNullException(nameof(containerName));
+
             var request = new HttpRequestMessage(HttpMethod.Head, EncodePath(containerName) + "?restype=container");
             var response = await SendRequest(request, cancellationToken);
 
@@ -384,6 +477,9 @@
 
         public async Task DeleteContainerAsync(string containerName, CancellationToken cancellationToken)
         {
+            if (containerName == null)
+                throw new ArgumentNullException(nameof(containerName));
+
             await SendRequest(new HttpRequestMessage(HttpMethod.Delete, EncodePath(containerName) + "?restype=container"), cancellationToken).ConfigureAwait(false);
         }
 
