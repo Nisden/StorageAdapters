@@ -139,7 +139,15 @@
             if (stream == null)
                 throw new ArgumentNullException(nameof(stream));
 
-            await service.SaveFileAsync(PathClean(path, true), stream, cancellationToken);
+            try
+            {
+                await service.SaveFileAsync(PathClean(path, true), stream, cancellationToken);
+            }
+            catch (NotFoundException)
+            {
+                await this.CreateDirectoryAsync(PathUtility.GetDirectoryName(this.Service.Configuration.DirectorySeperator, PathClean(path, false)), true, cancellationToken);
+                await service.SaveFileAsync(PathClean(path, true), stream, cancellationToken);
+            }
         }
 
         public async Task AppendFileAsync(string path, byte[] buffer)
